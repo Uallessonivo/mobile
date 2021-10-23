@@ -1,39 +1,58 @@
-import React from "react";
-import { Message } from "../Message";
+import React, { useState, useEffect } from "react";
 import { ScrollView } from "react-native";
+import { api } from "../../services/api";
+import { io } from "socket.io-client";
+
+import { MESSAGES_EXAMPLE } from "../../utils/messages";
+
+import { Message, MessageProps } from "../Message";
 
 import { styles } from "./styles";
 
-type MessageProps = {
-  id: string;
-  text: string;
-  user: {
-    name: string;
-    avatar_url: string;
-  };
-};
+let messagesQueue: MessageProps[] = MESSAGES_EXAMPLE;
+
+const socket = io(String(api.defaults.baseURL));
+socket.on("new_message", (newMessage) => {
+  messagesQueue.push(newMessage);
+  console.log(newMessage);
+});
 
 export function MessageList() {
+  const [currentMessages, setCurrentMessages] = useState<MessageProps[]>([]);
 
-  const message = {
-    id: "1",
-    text: "Hello, how are you?",
-    user: {
-      name: "John",
-      avatar_url: "https://github.com/uallessonivo.png",
-    },
-  };
+  useEffect(() => {
+    async function fetchMessages() {
+      const messagesResponse = await api.get<MessageProps[]>("/messages/last3");
+      setCurrentMessages(messagesResponse.data);
+    }
 
-  
+    fetchMessages();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (messagesQueue.length > 0) {
+        setCurrentMessages((prevState) => [
+          messagesQueue[0],
+          prevState[0],
+          prevState[1],
+        ]);
+        messagesQueue.shift();
+      }
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   return (
     <ScrollView
-      keyboardShouldPersistTaps="never"
-      contentContainerStyle={styles.content}
       style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="never"
     >
-      <Message data={message} />
-      <Message data={message} />
-      <Message data={message} />
+      {currentMessages.map((message) => (
+        <Message key={message.id} data={message} />
+      ))}
     </ScrollView>
   );
 }
